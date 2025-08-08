@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Kundenliste{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2>Kunden</h2>
+  <ul class="list-group" id="clientsList">
+    {% for client in clients %}
+      <li class="list-group-item list-group-item-action" style="cursor:pointer" data-client="{{ client.client_name }}">
+        {{ client.client_name }}
+        {% if client.has_unpaid %}
+          <span class="badge bg-danger ms-2">Offen</span>
+        {% else %}
+          <span class="badge bg-success ms-2">Bezahlt</span>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="debtsModal" tabindex="-1" aria-labelledby="debtsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="debtsModalLabel">Schulden von <span id="modalClientName"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered" id="debtsTable">
+          <thead>
+            <tr>
+              <th>Beschreibung</th>
+              <th>Betrag (€)</th>
+              <th>Handynummer</th>
+              <th>Status</th>
+              <th>Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Loaded dynamically -->
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <span id="unpaidTotal" class="me-auto fs-5"></span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const clientsList = document.getElementById('clientsList');
+  const debtsModal = new bootstrap.Modal(document.getElementById('debtsModal'));
+  const debtsTableBody = document.querySelector('#debtsTable tbody');
+  const modalClientName = document.getElementById('modalClientName');
+  const unpaidTotalSpan = document.getElementById('unpaidTotal');
+
+  clientsList.addEventListener('click', async (e) => {
+    const li = e.target.closest('li[data-client]');
+    if (!li) return;
+    const clientName = li.getAttribute('data-client');
+    modalClientName.textContent = clientName;
+
+    // Clear previous data
+    debtsTableBody.innerHTML = '';
+    unpaidTotalSpan.textContent = '';
+
+    try {
+      // Fetch debts data
+      const response = await fetch(`/clients/${encodeURIComponent(clientName)}/debts`);
+      const debts = await response.json();
+
+      if (!debts.length) {
+        debtsTableBody.innerHTML = `<tr><td colspan="5" class="text-center">Keine Schulden gefunden.</td></tr>`;
+        unpaidTotalSpan.textContent = '';
+      } else {
+        let totalUnpaid = 0;
+        debts.forEach(debt => {
+          if (!debt.paid) totalUnpaid += parseFloat(debt.amount);
+
+          debtsTableBody.innerHTML += `
+            <tr>
+              <td>${debt.description}</td>
+              <td>€${parseFloat(debt.amount).toFixed(2)}</td>
+              <td>${debt.phone_number}</td>
+              <td>
+                ${debt.paid 
+                  ? '<span class="badge bg-success">Bezahlt</span>' 
+                  : '<span class="badge bg-danger">Offen</span>'
+                }
+              </td>
+              <td>
+                ${!debt.paid ? `
+                <form method="POST" action="/schulden/redeem" style="display:inline;">
+                  <input type="hidden" name="debt_id" value="${debt.debt_id}">
+                  <button type="submit" class="btn btn-success btn-sm" title="Einlösen">
+                    <i class="bi bi-check2-circle"></i>
+                  </button>
+                </form>` : ''}
+
+                <button class="btn btn-warning btn-sm" title="Bearbeiten" onclick="openEditModal('${debt.debt_id}', '${debt.description}', '${debt.amount}', '${debt.phone_number}', '${clientName}')">
+                  <i class="bi bi-pencil-square"></i>
+                </button>
+
+                <form method="POST" action="/schulden/delete/${debt.debt_id}" onsubmit="return confirm('Schuld wirklich löschen?');" style="display:inline;">
+                  <button type="submit" class="btn btn-danger btn-sm" title="Löschen" ${!debt.paid ? 'disabled' : ''}>
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+          `;
+        });
+
+        unpaidTotalSpan.textContent = `Offene Gesamtschulden: €${totalUnpaid.toFixed(2)}`;
+      }
+      debtsModal.show();
+    } catch (err) {
+      debtsTableBody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">Fehler beim Laden der Schulden.</td></tr>`;
+      unpaidTotalSpan.textContent = '';
+      debtsModal.show();
+    }
+  });
+
+  // Edit modal handler (you can create a separate modal like in your initial code)
+  function openEditModal(debt_id, description, amount, phone_number, client_name) {
+    // You can implement this modal similar to your 'editDebtModal' or redirect to an edit page
+    alert(`Bearbeiten:\nID: ${debt_id}\nBeschreibung: ${description}\nBetrag: €${amount}\nTelefon: ${phone_number}\nKunde: ${client_name}`);
+    // TODO: Implement edit modal
+  }
+</script>
+{% endblock %}

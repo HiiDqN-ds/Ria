@@ -1,25 +1,16 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 import json, uuid, io, os, random, barcode
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, datetime, date
 from barcode.writer import ImageWriter
 from flask import jsonify,send_file
 from functools import wraps
 from db import *
 from flask_login import LoginManager, UserMixin, login_user, current_user, login_required, logout_user, LoginManager, current_user
-from flask import Response
-import barcode
-from barcode.writer import ImageWriter
 import io
-from db import fetch_one, execute_query
-from flask import request, flash, redirect, url_for
-from db import fetch_one, execute_query
-from flask import render_template
-from flask_login import login_required
-from sqlalchemy import func
-from flask import render_template, request, redirect, url_for, flash
-from db import fetch_all, execute_query
-from datetime import datetime, date
+from db import fetch_one, execute_query, fetch_all
+
+
 
 
 
@@ -404,7 +395,8 @@ def list_sellers():
     return render_template('sellers.html', sellers=sellers)
 
 # Add  user
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
+
 
 @app.route('/admin/sellers/add', methods=['GET', 'POST'])
 @login_required('admin')
@@ -558,8 +550,6 @@ def barcode_print(barcode_value):
 
 
 # Add Item
-from flask_login import current_user
-
 @app.route('/admin/items/add', methods=['GET', 'POST'])
 @login_required('admin')
 def add_item():
@@ -679,8 +669,6 @@ def find_item_by_barcode(barcode):
     return fetch_one("SELECT * FROM products WHERE barcode = %s;", (barcode,))
 
 
-
-from flask import request, session, redirect, url_for, flash, render_template
 from datetime import datetime
 import uuid
 from db import load_items, execute_query, get_connection  # your db helper functions
@@ -1760,11 +1748,22 @@ def save_kasse_balance():
 
     return redirect(url_for('admin_dashboard'))
 
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
+
+def start_scheduler():
+    scheduler = BackgroundScheduler()
+    # Run every day at 23:59
+    scheduler.add_job(func=calculate_and_save_today_closing_balance, trigger='cron', hour=23, minute=59)
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown())
 
 if __name__ == '__main__':
     
     # Ensure initial admin user exists
     users = load_users()
+    # Start scheduler when Flask app starts
+    start_scheduler()
     app.run(debug=True)
 
 

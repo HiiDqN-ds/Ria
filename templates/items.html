@@ -197,16 +197,13 @@ function printBarcode(barcode, productName, quantity = 1) {
           grid-template-columns: repeat(auto-fill, minmax(40mm, 1fr));
           gap: 5mm;
         }
-        .label {
-          width: 40mm;
-          height: 30mm;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          padding: 1mm;
-          box-sizing: border-box;
-          border: 1px solid #ccc;
+        .label img {
+          max-width: 36mm;
+          max-height: 22mm;
+          width: auto;
+          height: auto;
+          image-rendering: crisp-edges; /* better for sharp lines */
+          margin-bottom: 1mm;
         }
         .label img {
           width: 36mm;

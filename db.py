@@ -928,7 +928,9 @@ from datetime import datetime
 
 def get_kasse_balance_for_date(date):
     result = fetch_one("SELECT closing_balance FROM daily_cash_balance WHERE date = %s", (date,))
-    return float(result['closing_balance']) if result and result['closing_balance'] is not None else 0.0
+    if result and result['closing_balance'] is not None:
+        return float(result['closing_balance'])
+    return None  # No record found
 
 def calculate_sales_for_date(date):
     sales = load_sales()
@@ -971,17 +973,47 @@ def save_kasse_balance_for_date(date, balance):
     except Exception as e:
         logging.error(f"Error saving Kasse balance: {e}")
 
+
+def get_latest_balance_date():
+    result = fetch_one("SELECT MAX(date) AS last_date FROM daily_cash_balance")
+    last_date = result['last_date'] if result else None
+
+    if last_date is None:
+        return None
+
+    # If already date or datetime object, return date part
+    if isinstance(last_date, datetime):
+        return last_date.date()
+    if isinstance(last_date, str):
+        return datetime.fromisoformat(last_date).date()
+
+    # Otherwise, assume it's already a date
+    return last_date
+
+
+
+
+
+
 # Optional helper function to calculate & save today's closing balance (call this daily)
 def calculate_and_save_today_closing_balance():
-    from datetime import timedelta
+    from datetime import timedelta, datetime
+
+    last_date = get_latest_balance_date()
     today = datetime.now().date()
-    yesterday = today - timedelta(days=1)
 
-    closing_balance_yesterday = get_kasse_balance_for_date(yesterday)
-    sales_today = calculate_sales_for_date(today)
-    purchases_today = calculate_purchases_for_date(today)
+    if last_date is None:
+        # If no balance saved yet, start from yesterday so today will be calculated
+        last_date = today - timedelta(days=1)
 
-    closing_balance_today = round(closing_balance_yesterday + sales_today - purchases_today, 2)
+    current_date = last_date + timedelta(days=1)
 
-    save_kasse_balance_for_date(today, closing_balance_today)
-    logging.info(f"Closing balance for {today} saved: {closing_balance_today}")
+    while current_date <= today:
+        if get_kasse_balance_for_date(current_date) is None:
+            prev_balance = get_kasse_balance_for_date(current_date - timedelta(days=1)) or 0
+            sales = calculate_sales_for_date(current_date)
+            purchases = calculate_purchases_for_date(current_date)
+            balance = round(prev_balance + sales - purchases, 2)
+            save_kasse_balance_for_date(current_date, balance)
+            logging.info(f"Saved balance for {current_date}: {balance}")
+        current_date += timedelta(days=1)

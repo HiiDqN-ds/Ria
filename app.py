@@ -151,7 +151,7 @@ from datetime import datetime, timedelta
 @app.route('/admin/save_closing_balance')
 @login_required('admin')
 def admin_save_closing_balance():
-    calculate_and_save_today_closing_balance()
+    
     flash("Today's closing balance saved successfully.")
     return redirect(url_for('admin_dashboard'))
 
@@ -1749,14 +1749,12 @@ def save_kasse_balance():
     return redirect(url_for('admin_dashboard'))
 
 from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # Run every day at 23:59
-    scheduler.add_job(func=calculate_and_save_today_closing_balance, trigger='cron', hour=23, minute=59)
+    scheduler.add_job(calculate_and_save_today_closing_balance, 'cron', hour=23, minute=59)
     scheduler.start()
-    atexit.register(lambda: scheduler.shutdown())
+
 
 if __name__ == '__main__':
     

@@ -773,7 +773,7 @@ def calculate_monthly_sales():
 
 def get_kasse_cash():
     """Fetch current cash value from Kasse table."""
-    result = fetch_one("SELECT balance FROM kasse ORDER BY id DESC LIMIT 1")
+    result = fetch_one("SELECT balance FROM cash_transactions ORDER BY id DESC LIMIT 1")
     return round(result['balance'] or 0, 2)
 
 def calculate_today_sales():
@@ -810,7 +810,7 @@ def load_kasse_balance():
     return float(result['amount']) if result and result['amount'] is not None else 0.0
 
 
-def calculate_kassenstand():
+def ckassenstand():
     """Compute: Kasse + Einnahmen - Ausgaben"""
     cash = get_kasse_cash()
     sales_today = calculate_today_sales()

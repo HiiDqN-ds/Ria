@@ -156,6 +156,7 @@ def admin_save_closing_balance():
     return redirect(url_for('admin_dashboard'))
 
 from datetime import datetime, timedelta
+
 @app.route('/admin')
 @login_required('admin')
 def admin_dashboard():
@@ -185,8 +186,8 @@ def admin_dashboard():
     taegliche_einnahmen = calculate_sales_for_date(today)
     daily_purchases_total = calculate_purchases_for_date(today)
 
-    # Calculate current cash in the box
-    current_cash_in_box = round((closing_balance_yesterday + taegliche_einnahmen) - daily_purchases_total, 2)
+    # Calculate current cash in the box based on yesterday + today sales - today's purchases
+    current_cash_in_box = round(closing_balance_yesterday + taegliche_einnahmen - daily_purchases_total, 2)
 
     monthly_purchases_total = round(sum(
         float(p.get('total_price', 0)) for p in purchases
@@ -207,6 +208,14 @@ def admin_dashboard():
         WHERE type = 'auszahlung' AND date >= %s;
     """, (month_start,))
     monatliche_auszahlungen_kasse = float(auszahlungen_result['total'] or 0)
+
+    # Adjust current cash in box with monthly cash transactions
+    current_cash_in_box = round(
+        (closing_balance_yesterday + taegliche_einnahmen - daily_purchases_total)
+        + monatliche_einzahlungen_kasse
+        - monatliche_auszahlungen_kasse,
+        2
+    )
 
     unpaid_sum = round(sum(float(d['amount']) for d in debts if not d.get('paid', False)), 2)
 
@@ -230,6 +239,7 @@ def admin_dashboard():
     purchases_sorted = sorted(purchases, key=lambda x: x.get('order_date', datetime.min), reverse=True)
     total_order_sum = round(sum(float(p.get('total_price', 0)) for p in purchases), 2)
 
+    # Render the template with all data
     return render_template(
         "admin_dashboard.html",
         heutiger_gewinn=heutiger_gewinn,
@@ -244,8 +254,6 @@ def admin_dashboard():
         mailbox_notifications=mailbox_notifications,
         warehouse_notifications=warehouse_notifications,
         total_order_sum=total_order_sum,
-        monatliche_einzahlungen_kasse=monatliche_einzahlungen_kasse,
-        monatliche_auszahlungen_kasse=monatliche_auszahlungen_kasse,
         unpaid_sum=unpaid_sum
     )
 

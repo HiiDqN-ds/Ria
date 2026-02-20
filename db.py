@@ -927,54 +927,74 @@ import logging
 from datetime import datetime
 
 def get_kasse_balance_for_date(date):
-    """Get the closing balance for a specific date using direct SQL."""
-    if isinstance(date, datetime):
-        date = date.date()
-    result = fetch_one("SELECT closing_balance FROM daily_cash_balance WHERE date = %s", (date,))
-    if result and result['closing_balance'] is not None:
-        return float(result['closing_balance'])
-    return None  # No record found
+    """
+    Get the closing balance for a specific date using direct SQL.
+    Returns None if no balance found, or 0.0 if there's an error.
+    """
+    try:
+        if isinstance(date, datetime):
+            date = date.date()
+        result = fetch_one("SELECT closing_balance FROM daily_cash_balance WHERE date = %s", (date,))
+        if result and result['closing_balance'] is not None:
+            return float(result['closing_balance'])
+        return None  # No record found
+    except Exception as e:
+        logger.error(f"Error getting kasse balance for {date}: {e}")
+        return 0.0  # Return 0.0 on error instead of crashing
 
 
 def calculate_sales_for_date(date):
     """
     Calculate total sales for a specific date using direct SQL query.
     This is more accurate than iterating through loaded sales.
+    Returns 0.0 if there's an error.
     """
-    if isinstance(date, datetime):
-        date = date.date()
-    
-    start_datetime = datetime.combine(date, datetime.min.time())
-    end_datetime = datetime.combine(date, datetime.max.time())
+    try:
+        if isinstance(date, datetime):
+            date = date.date()
+        
+        start_datetime = datetime.combine(date, datetime.min.time())
+        end_datetime = datetime.combine(date, datetime.max.time())
 
-    query = """
-        SELECT COALESCE(SUM(si.total_price), 0) AS total
-        FROM sale_items si
-        JOIN sales s ON si.sale_id = s.sale_id
-        WHERE s.sale_date >= %s AND s.sale_date <= %s;
-    """
-    result = fetch_one(query, (start_datetime, end_datetime))
-    return round(float(result['total'] or 0), 2)
+        query = """
+            SELECT COALESCE(SUM(si.total_price), 0) AS total
+            FROM sale_items si
+            JOIN sales s ON si.sale_id = s.sale_id
+            WHERE s.sale_date >= %s AND s.sale_date <= %s;
+        """
+        result = fetch_one(query, (start_datetime, end_datetime))
+        return round(float(result['total'] or 0), 2)
+    except Exception as e:
+        logger.error(f"Error calculating sales for {date}: {e}")
+        return 0.0  # Return 0.0 on error instead of crashing
 
 
 def calculate_purchases_for_date(date):
     """
     Calculate total purchases for a specific date using direct SQL query.
+    Returns 0.0 if there's an error.
     """
-    if isinstance(date, datetime):
-        date = date.date()
-    
-    query = """
-        SELECT COALESCE(SUM(total_price), 0) AS total
-        FROM orders
-        WHERE date::date = %s;
-    """
-    result = fetch_one(query, (date,))
-    return round(float(result['total'] or 0), 2)
+    try:
+        if isinstance(date, datetime):
+            date = date.date()
+        
+        query = """
+            SELECT COALESCE(SUM(total_price), 0) AS total
+            FROM orders
+            WHERE date::date = %s;
+        """
+        result = fetch_one(query, (date,))
+        return round(float(result['total'] or 0), 2)
+    except Exception as e:
+        logger.error(f"Error calculating purchases for {date}: {e}")
+        return 0.0  # Return 0.0 on error instead of crashing
 
 
 def save_kasse_balance_for_date(date, balance):
-    """Save the closing balance for a specific date."""
+    """
+    Save the closing balance for a specific date.
+    Logs error but doesn't crash if there's an issue.
+    """
     try:
         if isinstance(date, datetime):
             date = date.date()
@@ -987,6 +1007,7 @@ def save_kasse_balance_for_date(date, balance):
         logging.info(f"Kasse balance saved for {date}: {balance}")
     except Exception as e:
         logging.error(f"Error saving Kasse balance: {e}")
+        # Don't re-raise - just log the error
 
 
 def get_latest_balance_date():

@@ -990,7 +990,6 @@ def save_kasse_balance_for_date(date, balance):
 
 
 def get_latest_balance_date():
-    """Get the most recent date for which a closing balance has been saved."""
     result = fetch_one("SELECT MAX(date) AS last_date FROM daily_cash_balance")
     last_date = result['last_date'] if result else None
 

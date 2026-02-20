@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}Schuldenverwaltung{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+
+  <h2>Schuldenverwaltung</h2>
+  <div class="mb-3">
+    <h5>Offene Gesamtschulden: <span class="text-danger">€{{ '%.2f'|format(unpaid_total or 0) }}</span></h5>
+  </div>
+
+  <button type="button" class="btn text-white mb-4" style="background-color: #0b6c72;" data-bs-toggle="modal" data-bs-target="#addDebtModal" aria-label="Neue Schuld hinzufügen">
+    Neue Schuld hinzufügen
+  </button>
+ 
+
+  <!-- Add Debt Modal -->
+<div class="modal fade" id="addDebtModal" tabindex="-1" aria-labelledby="addDebtModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"> <!-- add this class -->
+    <form method="POST" action="{{ url_for('add_debt_route') }}" novalidate>
+      <div class="modal-content">
+        <div class="modal-header text-white" style="background-color: #0b6c72;">
+          <h5 class="modal-title" id="addDebtModalLabel">Neue Schuld hinzufügen</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+          <input name="client_name" type="text" class="form-control mb-3" placeholder="Kundenname" required aria-required="true" autofocus>
+          <input name="description" type="text" class="form-control mb-3" placeholder="Beschreibung" required aria-required="true">
+          <input name="amount" type="number" class="form-control mb-3" placeholder="Betrag (€)" min="0.01" step="0.01" required aria-required="true">
+          <input name="phone" type="tel" class="form-control mb-3" placeholder="Handynummer" required aria-required="true" pattern="[+0-9\s\-]+" title="Telefonnummer im Format +49 123 4567890">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="submit" class="btn text-white" style="background-color: #0b6c72;">Hinzufügen</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+  <input type="search" id="searchInput" class="form-control mb-3" placeholder="🔍 Suche nach Kundenname" aria-label="Suche nach Kundenname" onkeyup="filterTable()" autofocus>
+
+  <table class="table table-bordered" id="debtTable" aria-describedby="searchInput">
+    <thead class="table-light">
+      <tr>
+        <th scope="col">#</th>
+        <th scope="col">Name</th>
+        <th scope="col">Erstellt</th>
+        <th scope="col">Gesamtschulden (€)</th>
+        <th scope="col">Status</th>
+        <th scope="col">Aktionen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for client in clients %}
+      <tr>
+        <th scope="row">{{ loop.index }}</th>
+        <td>{{ client.client_name }}</td>
+        <td>{{ client.first_created.strftime('%Y-%m-%d') if client.first_created else '-' }}</td>
+        <td>{{ '%.2f'|format(client.total_unpaid or 0) }}</td>
+        <td>
+          {% if client.total_unpaid == 0 %}
+            <span class="badge bg-success">Bezahlt</span>
+          {% else %}
+            <span class="badge bg-danger">Offen</span>
+          {% endif %}
+        </td>
+        <td>
+          <button 
+            type="button"
+            class="btn btn-primary btn-sm client-link"
+            data-client="{{ client.client_name }}"
+            aria-label="Details zu {{ client.client_name }}">
+            <i class="bi bi-info-circle"></i>
+          </button>
+
+          {% if client.total_unpaid == 0 %}
+          <form method="POST" action="{{ url_for('delete_client') }}" class="d-inline" onsubmit="return confirm('Kunde wirklich löschen?');" aria-label="Kunde löschen">
+            <input type="hidden" name="client_name" value="{{ client.client_name }}">
+            <button type="submit" class="btn btn-danger btn-sm" aria-label="Löschen">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+
+<!-- Debt Details Modal (cards) -->
+<div class="modal fade" id="debtDetailsModal" tabindex="-1" aria-labelledby="debtDetailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color: #0b6c72;">
+        <h5 class="modal-title text-white" id="debtDetailsModalLabel">Schulden Details</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
+      </div>
+      <div class="modal-body">
+        <div id="debtsCardsContainer" class="d-flex flex-column gap-3">
+          <!-- Debt cards inserted here -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Debt Modal -->
+<div class="modal fade" id="editDebtModal" tabindex="-1" aria-labelledby="editDebtModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"> <!-- This class vertically centers the dialog -->
+    <form method="POST" id="editDebtForm" novalidate>
+      <div class="modal-content">
+        <div class="modal-header text-white" style="background-color: #0b6c72;">
+          <h5 class="modal-title" id="editDebtModalLabel">Schuld bearbeiten</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="debt_id" id="editDebtId" />
+          <input type="text" name="name" id="editClientName" class="form-control mb-3" placeholder="Kundenname" required aria-required="true">
+          <input type="text" name="description" id="editDescription" class="form-control mb-3" placeholder="Beschreibung" required aria-required="true">
+          <input type="number" name="amount" id="editAmount" class="form-control mb-3" placeholder="Betrag (€)" min="0.01" step="0.01" required aria-required="true">
+          <input type="tel" name="phone" id="editPhone" class="form-control mb-3" placeholder="Handynummer" required aria-required="true" pattern="[+0-9\s\-]+" title="Telefonnummer im Format +49 123 4567890">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="submit" class="btn text-white" style="background-color: #0b6c72;">Speichern</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+<script>
+  // ======= EDIT DEBT MODAL POPULATION =======
+  document.addEventListener('click', function(e) {
+    const editBtn = e.target.closest('.edit-debt-btn');
+    if (editBtn) {
+      const debtId = editBtn.dataset.debtId;
+      const name = editBtn.dataset.clientName;
+      const description = editBtn.dataset.description;
+      const amount = editBtn.dataset.amount;
+      const phone = editBtn.dataset.phone;
+
+      document.getElementById('editDebtId').value = debtId;
+      document.getElementById('editClientName').value = name;
+      document.getElementById('editDescription').value = description;
+      document.getElementById('editAmount').value = amount;
+      document.getElementById('editPhone').value = phone;
+
+      document.getElementById('editDebtForm').action = `/schulden/edit/${debtId}`;
+
+      const editModal = new bootstrap.Modal(document.getElementById('editDebtModal'));
+      editModal.show();
+    }
+  });
+
+  // ======= LOAD CLIENT DEBTS AND RENDER CARDS =======
+  document.addEventListener('DOMContentLoaded', () => {
+    const debtDetailsModal = new bootstrap.Modal(document.getElementById('debtDetailsModal'));
+    const container = document.getElementById('debtsCardsContainer');
+
+    document.querySelectorAll('.client-link').forEach(button => {
+      button.addEventListener('click', () => {
+        const clientName = button.getAttribute('data-client');
+
+        container.innerHTML = '<p class="text-center text-muted">Lade Schulden...</p>';
+        debtDetailsModal.show();
+
+        fetch(`/clients/${encodeURIComponent(clientName)}/debts`)
+          .then(response => {
+            if (!response.ok) throw new Error('Netzwerkfehler');
+            return response.json();
+          })
+          .then(debts => {
+            container.innerHTML = '';
+
+            if (debts.length === 0) {
+              container.innerHTML = '<p class="text-center text-muted">Keine Schulden gefunden.</p>';
+              return;
+            }
+
+            debts.forEach(debt => {
+              const paidBadge = debt.paid
+                ? '<span class="badge bg-success">Bezahlt</span>'
+                : '<span class="badge bg-danger">Offen</span>';
+
+              const redeemBtn = !debt.paid ? `
+                <button type="button" class="btn btn-success btn-sm me-2 redeem-debt-btn" data-debt-id="${debt.debt_id}" title="Schuld einlösen">
+                  <i class="bi bi-check2-circle"></i> Einlösen
+                </button>` : '';
+
+              const card = `
+                <div class="card shadow-sm">
+                  <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+                    <div class="flex-grow-1">
+                      <h6 class="card-title mb-1">${debt.description}</h6>
+                      <p class="mb-1"><strong>Betrag:</strong> €${parseFloat(debt.amount).toFixed(2)}</p>
+                      <p class="mb-1"><strong>Telefon:</strong> ${debt.phone_number}</p>
+                      <p class="mb-0">${paidBadge} &nbsp; <small class="text-muted">Erstellt: ${debt.created_at || '-'}</small></p>
+                    </div>
+                    <div class="mt-3 mt-md-0 d-flex flex-wrap gap-2">
+                      ${redeemBtn}
+                      <button type="button" class="btn btn-warning btn-sm edit-debt-btn" 
+                        data-debt-id="${debt.debt_id}"
+                        data-client-name="${debt.client_name}"
+                        data-description="${debt.description}"
+                        data-amount="${debt.amount}"
+                        data-phone="${debt.phone_number}" 
+                        title="Bearbeiten">
+                        <i class="bi bi-pencil"></i> 
+                      </button>
+                      
+                    </div>
+                  </div>
+                </div>
+              `;
+              container.insertAdjacentHTML('beforeend', card);
+            });
+          })
+          .catch(() => {
+            container.innerHTML = '<p class="text-danger text-center">Fehler beim Laden der Schulden.</p>';
+          });
+      });
+    });
+
+    // ======= REDEEM DEBT BUTTON HANDLER (delegated) =======
+    container.addEventListener('click', e => {
+      const redeemBtn = e.target.closest('.redeem-debt-btn');
+      if (redeemBtn) {
+        const debtId = redeemBtn.getAttribute('data-debt-id');
+        if (confirm('Diese Schuld wirklich als bezahlt markieren?')) {
+          fetch(`/schulden/redeem/${debtId}`, { method: 'POST' })
+            .then(response => {
+              if (response.ok) {
+                location.reload();
+              } else {
+                alert('Fehler beim Einlösen der Schuld.');
+              }
+            })
+            .catch(() => alert('Fehler beim Einlösen der Schuld.'));
+        }
+      }
+    });
+  });
+
+  // ======= TABLE SEARCH =======
+  function filterTable() {
+    const filter = document.getElementById('searchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('#debtTable tbody tr');
+    rows.forEach(row => {
+      const name = row.cells[1].textContent.toLowerCase();
+      // Description is only in modal cards, so here we filter only by client name
+      if (name.includes(filter)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+</script>
+{% endblock %}
